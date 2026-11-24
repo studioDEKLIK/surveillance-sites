@@ -1,0 +1,42 @@
+# Surveillance de TOUS les sites DE'KLIK en un seul robot (remplace un robot par projet).
+# Dépôt PUBLIC : les minutes GitHub Actions y sont gratuites et illimitées. Il ne contient que des adresses
+# de sites déjà publics, aucun secret, aucun code client.
+# Alertes : une issue par site en panne (un e-mail à l'ouverture, un à la fermeture), pas un e-mail par vérification.
+name: Surveillance des sites
+
+on:
+  schedule:
+    - cron: '*/20 * * * *' # toutes les 20 minutes
+  workflow_dispatch:       # bouton « Run workflow » pour vérifier à la demande
+  push:
+    paths: ['sites.json', 'verifier.mjs']
+
+permissions:
+  contents: write # enregistre etat.json une fois par jour : GitHub suspend les robots d'un dépôt inactif 60 jours
+  issues: write   # ouvre / ferme les alertes
+
+concurrency:
+  group: surveillance
+  cancel-in-progress: false
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Vérifier les sites, certificats et domaines
+        run: node verifier.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Enregistrer l'état du jour
+        run: |
+          git diff --quiet etat.json && exit 0
+          git config user.name "surveillance-sites"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add etat.json
+          git commit -m "État des sites : $(date -u +%F)"
+          git push
